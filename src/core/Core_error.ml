@@ -348,14 +348,17 @@ let severity_of_error (typ : Out.error_type) : Out.error_severity =
 
 let log_exception_on_target_file (file : Fpath.t) (e : Exception.t) =
   let exn = Exception.get_exn e in
-  let msg = Printexc.to_string exn in
-  let log_msg f = f (fun m -> m "exception on %s (%s)" !!file msg) in
+  let exn_msg = Printexc.to_string exn in
+  let log_at_severity sev =
+    match sev with
+    | `Warning ->
+        Logs.warn (fun m -> m "exception on %s (%s)" !!file exn_msg)
+    | `Error -> Logs.err (fun m -> m "exception on %s (%s)" !!file exn_msg)
+    | `Info -> Logs.info (fun m -> m "exception on %s (%s)" !!file exn_msg)
+  in
   match exn with
   | Out_of_memory | Memory_limit.ExceededMemoryLimit _ | Stack_overflow ->
-      log_msg Logs.warn
+      Logs.warn (fun m -> m "exception on %s (%s)" !!file exn_msg)
   | _ ->
       let err = exn_to_error ~file e in
-      (match severity_of_error err.typ with
-      | `Warning -> log_msg Logs.warn
-      | `Error -> log_msg Logs.err
-      | `Info -> log_msg Logs.info)
+      log_at_severity (severity_of_error err.typ)
